@@ -20,14 +20,25 @@ export interface StatableFn {
 }
 
 export interface UseStable extends Function {
+  /**
+   * create stable object
+   */
   <T extends Record<string, any>>(
     values: T,
     options?: Omit<Options<T>, "props">
   ): T;
+
+  /**
+   * create stable object factory
+   */
   <T extends Record<string, any>, K, F extends (key: K) => T>(
     factory: F,
     options?: Options<T>
   ): F;
+
+  /**
+   * create stable object factory
+   */
   <
     T extends Record<string, any>,
     K,
@@ -176,6 +187,12 @@ const createStableObjectFactory = () => {
   };
 };
 
+/**
+ * create stable component from input component
+ * @param component
+ * @param options
+ * @returns
+ */
 export const stable: StatableFn = (component: any, options?: Options): any => {
   const Memoized = memo(component);
   Object.assign(Memoized, {
@@ -205,6 +222,11 @@ export const stable: StatableFn = (component: any, options?: Options): any => {
   return Wrapper;
 };
 
+/**
+ * create stable object / factory
+ * @param args
+ * @returns
+ */
 export const useStable: UseStable = (...args: any[]): any => {
   let factory: Function | undefined;
   let keySelector: Function | undefined;
@@ -228,9 +250,13 @@ export const useStable: UseStable = (...args: any[]): any => {
     return !factory ? createStableObject() : undefined;
   })[0];
 
-  if (stableFactory)
+  if (stableFactory) {
     stableFactory.update(factory as Function, keySelector, options);
-  if (stableObject) stableObject.update(object, options);
+  }
+
+  if (stableObject) {
+    stableObject.update(object, options);
+  }
 
   return stableFactory?.proxy ?? stableObject?.proxy;
 };

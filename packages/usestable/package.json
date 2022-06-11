@@ -1,0 +1,46 @@
+{
+  "name": "usestable",
+  "version": "0.0.0",
+  "description": "A React hook to create stable component/object",
+  "author": "linq2js <linqtojs@gmail.com>",
+  "repository": {
+    "url": "https://github.com/linq2js/usestable"
+  },
+  "homepage": "https://linq2js.github.io/usestable/",
+  "license": "ISC",
+  "main": "dist/tsc/main.js",
+  "types": "dist/tsc/main.d.ts",
+  "directories": {
+    "lib": "lib"
+  },
+  "files": [
+    "lib",
+    "dist/tsc",
+    "dynamic",
+    "styler",
+    "server",
+    "styled"
+  ],
+  "keywords": [
+    "styles",
+    "react",
+    "angular",
+    "vue",
+    "framework",
+    "css",
+    "css-in-js"
+  ],
+  "dependencies": {
+    "@emotion/css": "11.9.0"
+  },
+  "peerDependenciesMeta": {},
+  "scripts": {
+    "prepublishOnly": "yarn test && yarn && yarn build",
+    "lint": "eslint lib/ --ext .js,.jsx,.ts,.tsx",
+    "test": "jest --passWithNoTests",
+    "clean": "rm -rf dist build package",
+    "ts-node": "ts-node",
+    "build": "rimraf dist && tsc"
+  },
+  "gitHead": "ba5727dcd44c6f7a01daede877dcdd9da8d71a73"
+}

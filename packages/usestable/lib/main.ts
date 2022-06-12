@@ -1,4 +1,4 @@
-import { Component, createElement, FC, memo, useRef, useState } from "react";
+import { Component, createElement, FC, memo, useState } from "react";
 
 export interface Options<P = any> {
   props?: "*" | (keyof P)[];
@@ -199,25 +199,9 @@ export const stable: StatableFn = (component: any, options?: Options): any => {
     displayName: component.name || component.displayName,
   });
   const Wrapper = (props: any) => {
-    const prevRef = useRef<{ result: any; props: any }>();
     const stableObject = useState(() => createStableObject())[0];
-    stableObject.update(props);
-
-    if (
-      !prevRef.current ||
-      !shallowCompare(
-        prevRef.current.props,
-        props,
-        options?.deepCompare === true ? true : options?.deepCompare ?? 0
-      )
-    ) {
-      const prevProps = { ...stableObject.proxy };
-      prevRef.current = {
-        props: prevProps,
-        result: createElement(Memoized, prevProps),
-      };
-    }
-    return prevRef.current.result;
+    stableObject.update(props, options);
+    return createElement(Memoized, stableObject.proxy);
   };
   return Wrapper;
 };

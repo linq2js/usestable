@@ -1,11 +1,32 @@
 import { Component, createElement, FC, memo, useState } from "react";
 
+export type Comparer = (a: any, b: any) => boolean;
+
+export type CompareMode = "strict" | "shallow" | "deep";
+
+export type StableProps<T = any> =
+  | "*"
+  | (keyof T)[]
+  | { [name in keyof T]: true | CompareMode };
+
+/**
+ * Stable options
+ */
 export interface Options<P = any> {
-  props?: "*" | (keyof P)[];
-  deepCompare?: number | true;
+  /**
+   * indicate stable props of the component. all props = *
+   * ```jsx
+   * const MyButton = stable(ButtonImpl, { props: ['onClick', 'onDblClick'] });
+   * ```
+   */
+  props?: StableProps<P>;
+  compare?: CompareMode;
 }
 
 export interface StatableFn {
+  /**
+   * create stable component with an options
+   */
   <
     C,
     P extends C extends FC<infer TProps>
@@ -51,20 +72,41 @@ export interface UseStable extends Function {
   ): F;
 }
 
-const strictCompare = Object.is;
 const arraySliceMethod = [].slice;
+const regexpExecMethod = /a/.exec;
 const dateGetTimeMethod = new Date().getTime;
-let deepCompare: (a: any, b: any, deep: number | true) => boolean;
+const defaultCompare = (a: any, b: any, objectCompare?: Comparer) => {
+  if (a === b) return true;
+  if (!a && b) return false;
+  if (a && !b) return false;
 
-const shallowCompare = (a: any, b: any, deep: number | true) => {
-  const compare = deep ? deepCompare : strictCompare;
-  const nextDeep = deep === true ? true : deep - 1;
+  if (typeof a === "object" && typeof b === "object") {
+    // detect date obj
+    if (a.getTime === dateGetTimeMethod) {
+      if (b.getTime === dateGetTimeMethod) return a.getTime() === b.getTime();
+      return false;
+    }
+    // detect regex obj
+    if (a.exec === regexpExecMethod) {
+      if (b.exec === regexpExecMethod) return a.toString() === b.toString();
+      return false;
+    }
+    if (objectCompare) return objectCompare(a, b);
+  }
+
+  return false;
+};
+const shallowCompare = (
+  a: any,
+  b: any,
+  valueCompare: Comparer = defaultCompare
+) => {
   if (a.slice === arraySliceMethod) {
     if (b.slice !== arraySliceMethod) return false;
     const length = a.length;
     if (length !== b.length) return false;
     for (let i = 0; i < length; i++) {
-      if (!compare(a[i], b[i], nextDeep)) return false;
+      if (!valueCompare(a[i], b[i])) return false;
     }
     return true;
   }
@@ -72,27 +114,13 @@ const shallowCompare = (a: any, b: any, deep: number | true) => {
   const keys = new Set(Object.keys(a).concat(Object.keys(b)));
 
   for (const key of keys) {
-    if (!compare(a[key], b[key], nextDeep)) return false;
+    if (!valueCompare(a[key], b[key])) return false;
   }
 
   return true;
 };
-
-deepCompare = (a: any, b: any, deep: number | boolean) => {
-  if (a === b) return true;
-  if (!a && b) return false;
-  if (a && !b) return false;
-
-  if (typeof a === "object" && typeof b === "object") {
-    if (a.getTime === dateGetTimeMethod) {
-      if (b.getTime === dateGetTimeMethod) return a.getTime() === b.getTime();
-      return false;
-    }
-    if (deep) return shallowCompare(a, b, deep === true ? true : deep - 1);
-    return false;
-  }
-
-  return false;
+const deepCompare = (a: any, b: any) => {
+  return defaultCompare(a, b, (a, b) => shallowCompare(a, b, deepCompare));
 };
 
 const createStableFunction = (getCurrent: () => Function) => {
@@ -102,8 +130,34 @@ const createStableFunction = (getCurrent: () => Function) => {
   };
 };
 
-const createStableObject = () => {
-  const refs: { object: any; options: Options } = {
+const createComparer = (mode?: CompareMode) => {
+  return mode === "deep"
+    ? deepCompare
+    : mode === "shallow"
+    ? shallowCompare
+    : defaultCompare;
+};
+
+const createComparerFactory = (props: StableProps, mode?: CompareMode) => {
+  const comparer = createComparer(mode);
+  if (props === "*") {
+    return () => comparer;
+  }
+  if (Array.isArray(props))
+    return (p: any) => (props.includes(p) ? comparer : undefined);
+  return (p: any) => {
+    const mode = props[p];
+    return createComparer(mode === true ? "strict" : mode);
+  };
+};
+
+const createStableObject = (isReactProps = false) => {
+  const refs: {
+    object: any;
+    getComparer: ReturnType<typeof createComparerFactory>;
+    options: Options;
+  } = {
+    getComparer: createComparerFactory("*"),
     options: { props: "*" },
     object: {},
   };
@@ -112,27 +166,38 @@ const createStableObject = () => {
     {},
     {
       get(_, p) {
-        const isStableProp =
-          refs.options.props === "*" || refs.options.props?.includes(p);
         const currentValue = refs.object[p];
+        if (isReactProps) {
+          if (
+            p === "key" ||
+            p === "ref" ||
+            // private/special prop
+            (typeof p === "string" && p[0] === "_")
+          )
+            return currentValue;
+        }
 
-        if (!isStableProp) return currentValue;
+        const compare = refs.getComparer(p);
+
+        if (!compare) return currentValue;
 
         let cachedValue = cache.get(p);
 
+        // hanlde stable function
         if (typeof currentValue === "function") {
-          if (!cachedValue || typeof cachedValue !== "function") {
+          // create stable function if cacheValue is not function
+          if (typeof cachedValue !== "function") {
             cachedValue = createStableFunction(() => refs.object[p]);
             cache.set(p, cachedValue);
           }
           return cachedValue;
         }
 
-        if (
-          deepCompare(cachedValue, currentValue, refs.options.deepCompare ?? 0)
-        ) {
-          return cachedValue;
-        }
+        // other value types
+        const isEqual = compare(cachedValue, currentValue);
+
+        if (isEqual) return cachedValue;
+
         cache.set(p, currentValue);
         return currentValue;
       },
@@ -147,8 +212,12 @@ const createStableObject = () => {
 
   return {
     proxy,
-    update(object: any, { props = "*", deepCompare = 0 }: Options = {}) {
-      Object.assign(refs, { object, options: { props, deepCompare } });
+    update(object: any, { props = "*", compare }: Options = {}) {
+      Object.assign(refs, {
+        object,
+        getComparer: createComparerFactory(props, compare),
+        options: { props, deepCompare },
+      });
     },
   };
 };
@@ -176,12 +245,12 @@ const createStableObjectFactory = () => {
     update(
       factory: Function,
       keySelector?: Function,
-      { props = "*", deepCompare = 0 }: Options = {}
+      { props = "*", compare }: Options = {}
     ) {
       Object.assign(refs, {
         factory,
         keySelector,
-        options: { props, deepCompare },
+        options: { props, compare },
       });
     },
   };
@@ -199,7 +268,7 @@ export const stable: StatableFn = (component: any, options?: Options): any => {
     displayName: component.name || component.displayName,
   });
   const Wrapper = (props: any) => {
-    const stableObject = useState(() => createStableObject())[0];
+    const stableObject = useState(() => createStableObject(true))[0];
     stableObject.update(props, options);
     return createElement(Memoized, stableObject.proxy);
   };

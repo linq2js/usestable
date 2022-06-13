@@ -1,6 +1,6 @@
 {
   "name": "usestable",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "A React hook to create stable component/object",
   "author": "linq2js <linqtojs@gmail.com>",
   "repository": {

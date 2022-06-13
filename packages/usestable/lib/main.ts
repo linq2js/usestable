@@ -1,4 +1,13 @@
-import { Component, createElement, FC, memo, useState } from "react";
+import {
+  ClassAttributes,
+  Component,
+  createElement,
+  FC,
+  HTMLAttributes,
+  memo,
+  ReactHTML,
+  useState,
+} from "react";
 
 export type CompareFn<T = any> = (a: T, b: T) => boolean;
 
@@ -28,6 +37,14 @@ export interface Options<P = any> {
 }
 
 export interface StatableFn {
+  /**
+   * create stable component from tag name
+   */
+  <P extends HTMLAttributes<T>, T extends HTMLElement>(
+    type: keyof ReactHTML,
+    options?: Options<(ClassAttributes<T> & P) | null>
+  ): FC<(ClassAttributes<T> & P) | null>;
+
   /**
    * create stable component with an options
    */
@@ -313,15 +330,21 @@ const createStableObjectFactory = () => {
  * @returns
  */
 export const stable: StatableFn = (component: any, options?: Options): any => {
-  const Memoized = memo(component);
+  const Memoized = typeof component === "string" ? component : memo(component);
+
   Object.assign(Memoized, {
-    displayName: component.name || component.displayName,
+    displayName:
+      typeof component === "string"
+        ? component
+        : component.name || component.displayName,
   });
+
   const Wrapper = (props: any) => {
     const stableObject = useState(() => createStableObject(true))[0];
     stableObject.update(props, options);
     return createElement(Memoized, stableObject.proxy);
   };
+
   return Wrapper;
 };
 

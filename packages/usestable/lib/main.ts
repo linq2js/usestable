@@ -107,7 +107,7 @@ const dateGetTimeMethod = new Date().getTime;
  * @param objectCompare
  * @returns
  */
-export const defaultCompare = (a: any, b: any, objectCompare?: CompareFn) => {
+export const defaultEqual = (a: any, b: any, objectCompare?: CompareFn) => {
   if (a === b) return true;
   if (!a && b) return false;
   if (a && !b) return false;
@@ -123,6 +123,7 @@ export const defaultCompare = (a: any, b: any, objectCompare?: CompareFn) => {
       if (b.exec === regexpExecMethod) return a.toString() === b.toString();
       return false;
     }
+
     if (objectCompare) return objectCompare(a, b);
   }
 
@@ -136,10 +137,10 @@ export const defaultCompare = (a: any, b: any, objectCompare?: CompareFn) => {
  * @param valueCompare
  * @returns
  */
-export const shallowCompare = (
+export const shallowEqual = (
   a: any,
   b: any,
-  valueCompare: CompareFn = defaultCompare
+  valueCompare: CompareFn = defaultEqual
 ) => {
   const objectCompare = (a: any, b: any) => {
     if (a.slice === arraySliceMethod) {
@@ -160,7 +161,7 @@ export const shallowCompare = (
 
     return true;
   };
-  return defaultCompare(a, b, objectCompare);
+  return defaultEqual(a, b, objectCompare);
 };
 
 /**
@@ -169,8 +170,8 @@ export const shallowCompare = (
  * @param b
  * @returns
  */
-export const deepCompare = (a: any, b: any) => {
-  return shallowCompare(a, b, deepCompare);
+export const deepEqual = (a: any, b: any) => {
+  return shallowEqual(a, b, deepEqual);
 };
 
 /**
@@ -199,10 +200,10 @@ const createCompareFn = (option?: CompareOption) => {
   if (typeof option === "function") return option;
 
   return option === "deep"
-    ? deepCompare
+    ? deepEqual
     : option === "shallow"
-    ? shallowCompare
-    : defaultCompare;
+    ? shallowEqual
+    : defaultEqual;
 };
 
 const createComparerFactory = (props: StableProps, mode?: CompareOption) => {
@@ -283,7 +284,7 @@ const createStableObject = (isReactProps = false) => {
       Object.assign(refs, {
         object,
         getComparer: createComparerFactory(props, compare),
-        options: { props, deepCompare },
+        options: { props, deepCompare: deepEqual },
       });
     },
   };
@@ -331,13 +332,6 @@ const createStableObjectFactory = () => {
  */
 export const stable: StatableFn = (component: any, options?: Options): any => {
   const Memoized = typeof component === "string" ? component : memo(component);
-
-  Object.assign(Memoized, {
-    displayName:
-      typeof component === "string"
-        ? component
-        : component.name || component.displayName,
-  });
 
   const Wrapper = (props: any) => {
     const stableObject = useState(() => createStableObject(true))[0];

@@ -3,6 +3,7 @@
   - [Motivation](#motivation)
     - [Stable identity callback](#stable-identity-callback)
     - [Geting fresh values in callbacks](#geting-fresh-values-in-callbacks)
+    - [Conditional callbacks](#conditional-callbacks)
   - [API references](#api-references)
 
 # `useStable`
@@ -124,7 +125,7 @@ const callback = useEvent(async () => {
 });
 ```
 
-You totally archive same goal with useStable() hook
+You totally archive all above things with useStable() hook
 
 ```js
 import { useStable } from "usestable";
@@ -165,6 +166,31 @@ useEffect(() => {
   });
 }, [stable /* add more dependencies ad you need */]);
 ```
+
+### Conditional callbacks
+
+Sometimes React memo and useEvent fail with conditional callbacks
+
+```js
+function Chat({ onOdd, onEven }) {
+  const [text, setText] = useState("");
+
+  return <SendButton onClick={text.length % 2 ? onEven : onOdd} />;
+}
+```
+
+You must add more useEvent hook to handle conditional callbacks
+
+```js
+function Chat({ onOdd, onEven }) {
+  const [text, setText] = useState("");
+  const onClick = useEvent(() => (text.length % 2 ? onEven() : onOdd()));
+
+  return <SendButton onClick={onClick} />;
+}
+```
+
+If SendButton already wrapped by stable() HOC, everything done without any effort
 
 ## API references
 

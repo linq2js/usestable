@@ -183,17 +183,26 @@ export const isPromiseLike = (value: any): value is Promise<any> => {
   return value && typeof value.then === "function";
 };
 
+const getStableMeta = (
+  fn: Function
+): { getCurrent: () => Function; proxy: any } | undefined => {
+  return (fn as any).stableProxy;
+};
+
 const createStableFunction = (getCurrent: () => Function, proxy: any) => {
-  return (...args: any[]) => {
-    const current = getCurrent();
-    const result = current.apply(proxy, args);
-    if (process.env.NODE_ENV !== "production" && isPromiseLike(result)) {
-      console.warn(
-        "Becareful to use async stable function. You should use: const stable = useStable({ value }); const callback = useCallback(() => stable.value, [stable])"
-      );
-    }
-    return result;
-  };
+  return Object.assign(
+    (...args: any[]) => {
+      const current = getCurrent();
+      const result = current.apply(proxy, args);
+      if (process.env.NODE_ENV !== "production" && isPromiseLike(result)) {
+        console.warn(
+          "Becareful to use async stable function. You should use: const stable = useStable({ value }); const callback = useCallback(() => stable.value, [stable])"
+        );
+      }
+      return result;
+    },
+    { stableMeta: { proxy, getCurrent } }
+  );
 };
 
 const createCompareFn = (option?: CompareOption) => {
@@ -220,8 +229,9 @@ const createComparerFactory = (props: StableProps, mode?: CompareOption) => {
 };
 
 const createStableObject = (isReactProps = false) => {
+  let cachedPropNames: string[] | undefined;
   const refs: {
-    object: any;
+    object: Record<string | symbol, any>;
     getCompareFnFromProp: ReturnType<typeof createComparerFactory>;
     options: Options;
   } = {
@@ -233,6 +243,23 @@ const createStableObject = (isReactProps = false) => {
   const proxy = new Proxy(
     {},
     {
+      set(_, p, value) {
+        if (!(p in refs.object)) {
+          throw new Error(`Unknown prop ${p.toString()}`);
+        }
+        if (typeof value === "function") {
+          const meta = getStableMeta(value);
+          // is stable function
+          if (meta) {
+            refs.object[p] = meta.getCurrent();
+          } else {
+            refs.object[p] = value;
+          }
+        } else {
+          refs.object[p] = value;
+        }
+        return true;
+      },
       get(_, p) {
         const currentValue = refs.object[p];
         if (isReactProps) {
@@ -273,7 +300,7 @@ const createStableObject = (isReactProps = false) => {
         return { enumerable: true, configurable: true };
       },
       ownKeys() {
-        return Object.keys(refs.object);
+        return cachedPropNames ?? (cachedPropNames = Object.keys(refs.object));
       },
     }
   );
@@ -281,8 +308,10 @@ const createStableObject = (isReactProps = false) => {
   return {
     proxy,
     update(object: any, { props = "*", compare }: Options = {}) {
+      // remove cache
+      cachedPropNames = undefined;
       Object.assign(refs, {
-        object,
+        object: { ...object },
         getComparer: createComparerFactory(props, compare),
         options: { props, deepCompare: deepEqual },
       });

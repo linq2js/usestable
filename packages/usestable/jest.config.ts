@@ -6,6 +6,6 @@ const config: Config.InitialOptions = {
     "^.+\\.tsx?$": "ts-jest",
   },
   testEnvironment: "jsdom",
-  testPathIgnorePatterns: ["__tests__/utils.ts"],
+  testPathIgnorePatterns: ["__tests__/utils.ts", "dist/"],
 };
 export default config;

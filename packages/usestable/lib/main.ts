@@ -1,13 +1,17 @@
 import { Component, createElement, FC, memo, useState } from "react";
 
-export type Comparer = (a: any, b: any) => boolean;
+export type CompareFn<T = any> = (a: T, b: T) => boolean;
 
-export type CompareMode = "strict" | "shallow" | "deep";
+export type CompareOption<T = any> =
+  | "strict"
+  | "shallow"
+  | "deep"
+  | CompareFn<T>;
 
 export type StableProps<T = any> =
   | "*"
   | (keyof T)[]
-  | { [name in keyof T]: true | CompareMode };
+  | { [name in keyof T]: true | CompareOption<T[name]> };
 
 /**
  * Stable options
@@ -20,7 +24,7 @@ export interface Options<P = any> {
    * ```
    */
   props?: StableProps<P>;
-  compare?: CompareMode;
+  compare?: CompareOption;
 }
 
 export interface StatableFn {
@@ -75,7 +79,18 @@ export interface UseStable extends Function {
 const arraySliceMethod = [].slice;
 const regexpExecMethod = /a/.exec;
 const dateGetTimeMethod = new Date().getTime;
-const defaultCompare = (a: any, b: any, objectCompare?: Comparer) => {
+
+/**
+ * perform comparison for 2 values. This compare function also handle Date and Regex comparisons
+ * the date values are equal if their timestamps (a value return from getTime() method) are equal
+ * the regex values are equal if their string values (a value return from toString() method) are equal
+ * objectCompare will be called if both values are objects
+ * @param a
+ * @param b
+ * @param objectCompare
+ * @returns
+ */
+export const defaultCompare = (a: any, b: any, objectCompare?: CompareFn) => {
   if (a === b) return true;
   if (!a && b) return false;
   if (a && !b) return false;
@@ -96,50 +111,85 @@ const defaultCompare = (a: any, b: any, objectCompare?: Comparer) => {
 
   return false;
 };
-const shallowCompare = (
+
+/**
+ * perfrom shallow compare for 2 values. by default, shallowCompare uses defaultCompare to compare array items, object prop values
+ * @param a
+ * @param b
+ * @param valueCompare
+ * @returns
+ */
+export const shallowCompare = (
   a: any,
   b: any,
-  valueCompare: Comparer = defaultCompare
+  valueCompare: CompareFn = defaultCompare
 ) => {
-  if (a.slice === arraySliceMethod) {
-    if (b.slice !== arraySliceMethod) return false;
-    const length = a.length;
-    if (length !== b.length) return false;
-    for (let i = 0; i < length; i++) {
-      if (!valueCompare(a[i], b[i])) return false;
+  const objectCompare = (a: any, b: any) => {
+    if (a.slice === arraySliceMethod) {
+      if (b.slice !== arraySliceMethod) return false;
+      const length = a.length;
+      if (length !== b.length) return false;
+      for (let i = 0; i < length; i++) {
+        if (!valueCompare(a[i], b[i])) return false;
+      }
+      return true;
     }
+
+    const keys = new Set(Object.keys(a).concat(Object.keys(b)));
+
+    for (const key of keys) {
+      if (!valueCompare(a[key], b[key])) return false;
+    }
+
     return true;
-  }
-
-  const keys = new Set(Object.keys(a).concat(Object.keys(b)));
-
-  for (const key of keys) {
-    if (!valueCompare(a[key], b[key])) return false;
-  }
-
-  return true;
-};
-const deepCompare = (a: any, b: any) => {
-  return defaultCompare(a, b, (a, b) => shallowCompare(a, b, deepCompare));
+  };
+  return defaultCompare(a, b, objectCompare);
 };
 
-const createStableFunction = (getCurrent: () => Function) => {
+/**
+ * peform deep comparison for 2 values
+ * @param a
+ * @param b
+ * @returns
+ */
+export const deepCompare = (a: any, b: any) => {
+  return shallowCompare(a, b, deepCompare);
+};
+
+/**
+ * check a value is whether promise object or not
+ * @param value
+ * @returns
+ */
+export const isPromiseLike = (value: any): value is Promise<any> => {
+  return value && typeof value.then === "function";
+};
+
+const createStableFunction = (getCurrent: () => Function, proxy: any) => {
   return (...args: any[]) => {
     const current = getCurrent();
-    return current(...args);
+    const result = current.apply(proxy, args);
+    if (process.env.NODE_ENV !== "production" && isPromiseLike(result)) {
+      console.warn(
+        "Becareful to use async stable function. You should use: const stable = useStable({ value }); const callback = useCallback(() => stable.value, [stable])"
+      );
+    }
+    return result;
   };
 };
 
-const createComparer = (mode?: CompareMode) => {
-  return mode === "deep"
+const createCompareFn = (option?: CompareOption) => {
+  if (typeof option === "function") return option;
+
+  return option === "deep"
     ? deepCompare
-    : mode === "shallow"
+    : option === "shallow"
     ? shallowCompare
     : defaultCompare;
 };
 
-const createComparerFactory = (props: StableProps, mode?: CompareMode) => {
-  const comparer = createComparer(mode);
+const createComparerFactory = (props: StableProps, mode?: CompareOption) => {
+  const comparer = createCompareFn(mode);
   if (props === "*") {
     return () => comparer;
   }
@@ -147,17 +197,17 @@ const createComparerFactory = (props: StableProps, mode?: CompareMode) => {
     return (p: any) => (props.includes(p) ? comparer : undefined);
   return (p: any) => {
     const mode = props[p];
-    return createComparer(mode === true ? "strict" : mode);
+    return createCompareFn(mode === true ? "strict" : mode);
   };
 };
 
 const createStableObject = (isReactProps = false) => {
   const refs: {
     object: any;
-    getComparer: ReturnType<typeof createComparerFactory>;
+    getCompareFnFromProp: ReturnType<typeof createComparerFactory>;
     options: Options;
   } = {
-    getComparer: createComparerFactory("*"),
+    getCompareFnFromProp: createComparerFactory("*"),
     options: { props: "*" },
     object: {},
   };
@@ -177,9 +227,9 @@ const createStableObject = (isReactProps = false) => {
             return currentValue;
         }
 
-        const compare = refs.getComparer(p);
+        const compareFn = refs.getCompareFnFromProp(p);
 
-        if (!compare) return currentValue;
+        if (!compareFn) return currentValue;
 
         let cachedValue = cache.get(p);
 
@@ -187,14 +237,14 @@ const createStableObject = (isReactProps = false) => {
         if (typeof currentValue === "function") {
           // create stable function if cacheValue is not function
           if (typeof cachedValue !== "function") {
-            cachedValue = createStableFunction(() => refs.object[p]);
+            cachedValue = createStableFunction(() => refs.object[p], proxy);
             cache.set(p, cachedValue);
           }
           return cachedValue;
         }
 
         // other value types
-        const isEqual = compare(cachedValue, currentValue);
+        const isEqual = compareFn(cachedValue, currentValue);
 
         if (isEqual) return cachedValue;
 

@@ -353,7 +353,6 @@ export const useStable: UseStable = (...args: any[]): any => {
   let initializer: Function | undefined;
   let object: any;
   let options: Options | undefined;
-  const updated = useState(() => new Set<any>())[0];
 
   if (typeof args[0] === "function") {
     [initializer, object, options] = args;
@@ -371,12 +370,11 @@ export const useStable: UseStable = (...args: any[]): any => {
           nestedStableObject = createStableObject();
           nestedStableObjects.set(key, nestedStableObject);
         }
-        if (!updated.has(nestedStableObject)) {
-          updated.add(nestedStableObject);
-          nestedStableObject.update(props, options);
-        }
+        nestedStableObject.update(props, options);
       });
       so.update(initProps, options);
+      const { $init } = so.proxy as any;
+      $init?.();
     }
     return so;
   })[0];
@@ -386,8 +384,6 @@ export const useStable: UseStable = (...args: any[]): any => {
   } else {
     stableObject.update(object, options);
   }
-
-  updated.clear();
 
   useEffect(() => {
     const { $mount, $unmount } = stableObject.proxy as any;

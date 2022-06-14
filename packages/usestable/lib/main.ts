@@ -61,36 +61,37 @@ export interface StatableFn {
   ): FC<P>;
 }
 
+export interface CreatorBuilder extends Function {
+  <T extends Record<string, any>, K>(props: () => T, options?: Options<T>): (
+    param: K
+  ) => T;
+  <T extends Record<string, any>, K, TArgs extends any[]>(
+    props: () => T,
+    keySelector: (...args: TArgs) => K,
+    options?: Options<T>
+  ): (...args: TArgs) => T;
+}
+
 export interface UseStable extends Function {
   /**
    * create stable object
    */
+  <T extends Record<string, any>>(values: T, options?: Options<T>): T;
+
+  /**
+   * create stable object with init function
+   */
   <T extends Record<string, any>>(
-    values: T,
-    options?: Omit<Options<T>, "props">
+    init: (
+      create: <TT extends Record<string, any>>(
+        key: any,
+        props: TT,
+        options?: Options<TT>
+      ) => TT
+    ) => T,
+    update: Partial<T>,
+    options?: Options<T>
   ): T;
-
-  /**
-   * create stable object factory
-   */
-  <T extends Record<string, any>, K, F extends (key: K) => T>(
-    factory: F,
-    options?: Options<T>
-  ): F;
-
-  /**
-   * create stable object factory
-   */
-  <
-    T extends Record<string, any>,
-    K,
-    P extends any[],
-    F extends (...args: P) => T
-  >(
-    factory: F,
-    keySelector: (...args: P) => K,
-    options?: Options<T>
-  ): F;
 }
 
 const arraySliceMethod = [].slice;
@@ -229,12 +230,14 @@ const createComparerFactory = (props: StableProps, mode?: CompareOption) => {
 };
 
 const createStableObject = (isReactProps = false) => {
-  let cachedPropNames: string[] | undefined;
-  const refs: {
+  type Refs = {
     object: Record<string | symbol, any>;
     getCompareFnFromProp: ReturnType<typeof createComparerFactory>;
     options: Options;
-  } = {
+  };
+
+  let cachedPropNames: string[] | undefined;
+  const refs: Refs = {
     getCompareFnFromProp: createComparerFactory("*"),
     options: { props: "*" },
     object: {},
@@ -307,6 +310,9 @@ const createStableObject = (isReactProps = false) => {
 
   return {
     proxy,
+    merge(object: any, options: Options = {}) {
+      return this.update({ ...refs.object, ...object }, options);
+    },
     update(object: any, { props = "*", compare }: Options = {}) {
       // remove cache
       cachedPropNames = undefined;
@@ -314,40 +320,6 @@ const createStableObject = (isReactProps = false) => {
         object: { ...object },
         getComparer: createComparerFactory(props, compare),
         options: { props, deepCompare: deepEqual },
-      });
-    },
-  };
-};
-
-const createStableObjectFactory = () => {
-  const refs: {
-    factory?: Function;
-    keySelector?: Function;
-    options: Options;
-  } = { options: {} };
-  const stableObjects = new Map<any, ReturnType<typeof createStableObject>>();
-  const proxy = (...args: any[]) => {
-    const key = refs.keySelector ? refs.keySelector(...args) : args[0];
-    let so = stableObjects.get(key);
-    if (!so) {
-      so = createStableObject();
-      stableObjects.set(key, so);
-    }
-    so.update(refs.factory?.(...args), refs.options);
-    return so.proxy;
-  };
-
-  return {
-    proxy,
-    update(
-      factory: Function,
-      keySelector?: Function,
-      { props = "*", compare }: Options = {}
-    ) {
-      Object.assign(refs, {
-        factory,
-        keySelector,
-        options: { props, compare },
       });
     },
   };
@@ -377,35 +349,44 @@ export const stable: StatableFn = (component: any, options?: Options): any => {
  * @returns
  */
 export const useStable: UseStable = (...args: any[]): any => {
-  let factory: Function | undefined;
-  let keySelector: Function | undefined;
+  let initializer: Function | undefined;
   let object: any;
   let options: Options | undefined;
+  const updated = useState(() => new Set<any>())[0];
 
   if (typeof args[0] === "function") {
-    if (typeof args[1] === "function") {
-      [factory, keySelector, options] = args;
-    } else {
-      [factory, options] = args;
-    }
+    [initializer, object, options] = args;
   } else {
     [object, options] = args;
   }
 
-  const stableFactory = useState(() => {
-    return factory ? createStableObjectFactory() : undefined;
-  })[0];
   const stableObject = useState(() => {
-    return !factory ? createStableObject() : undefined;
+    const so = createStableObject();
+    if (initializer) {
+      const nestedStableObjects = new Map();
+      const initProps = initializer((key: any, props: any, options: any) => {
+        let nestedStableObject = nestedStableObjects.get(key);
+        if (!nestedStableObject) {
+          nestedStableObject = createStableObject();
+          nestedStableObjects.set(key, nestedStableObject);
+        }
+        if (!updated.has(nestedStableObject)) {
+          updated.add(nestedStableObject);
+          nestedStableObject.update(props, options);
+        }
+      });
+      so.update(initProps, options);
+    }
+    return so;
   })[0];
 
-  if (stableFactory) {
-    stableFactory.update(factory as Function, keySelector, options);
-  }
-
-  if (stableObject) {
+  if (initializer) {
+    stableObject.merge(object, options);
+  } else {
     stableObject.update(object, options);
   }
 
-  return stableFactory?.proxy ?? stableObject?.proxy;
+  updated.clear();
+
+  return stableObject.proxy;
 };

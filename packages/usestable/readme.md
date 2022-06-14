@@ -1,10 +1,12 @@
 - [`useStable`](#usestable)
   - [Installation](#installation)
   - [Motivation](#motivation)
+  - [Recipes](#recipes)
     - [Stable identity callback](#stable-identity-callback)
+    - [Stable component](#stable-component)
     - [Geting fresh values in callbacks](#geting-fresh-values-in-callbacks)
     - [Conditional callbacks](#conditional-callbacks)
-  - [API references](#api-references)
+  - [API reference](#api-reference)
 
 # `useStable`
 
@@ -26,9 +28,13 @@ yarn add usestable
 
 ## Motivation
 
-Inspired by [useEvent RFC](https://github.com/reactjs/rfcs/pull/220). What's useEvent does:
+Inspired by [useEvent RFC](https://github.com/reactjs/rfcs/pull/220)
+
+## Recipes
 
 ### Stable identity callback
+
+**with useEvent**
 
 ```js
 import { useEvent } from "react";
@@ -44,7 +50,7 @@ function Chat() {
 }
 ```
 
-with useStable
+**with useStable**
 
 ```js
 import { useStable } from "react";
@@ -61,9 +67,10 @@ function Chat() {
 }
 ```
 
-For above examples, you must wrap your SendButton with memo(). Need to useEvent every time and easy to forget.
+### Stable component
 
-**Better solution: wrap once, use everywhere**
+For above examples, you must wrap your SendButton with memo(). Need to useEvent every time and easy to forget.
+`usestable` provide stable() HOC to create a stable component on the fly
 
 ```js
 import { stable } from "usestable";
@@ -99,6 +106,8 @@ function Chat({ rooms }) {
 
 ### Geting fresh values in callbacks
 
+**with useEvent**
+
 ```js
 const contextVariable = useContext(SomeContext);
 const callback = useEvent(async () => {
@@ -125,7 +134,7 @@ const callback = useEvent(async () => {
 });
 ```
 
-You totally archive all above things with useStable() hook
+**with useStable**
 
 ```js
 import { useStable } from "usestable";
@@ -192,6 +201,6 @@ function Chat({ onOdd, onEven }) {
 
 If SendButton already wrapped by stable() HOC, everything done without any effort
 
-## API references
+## API reference
 
 https://linq2js.github.io/usestable/

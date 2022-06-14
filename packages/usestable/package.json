@@ -1,6 +1,6 @@
 {
   "name": "usestable",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "A React hook to create stable component/object",
   "author": "linq2js <linqtojs@gmail.com>",
   "repository": {
@@ -24,7 +24,6 @@
     "hook",
     "object"
   ],
-  "dependencies": {},
   "peerDependenciesMeta": {},
   "scripts": {
     "prepublishOnly": "yarn test && yarn && yarn build",

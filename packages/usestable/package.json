@@ -15,20 +15,14 @@
   },
   "files": [
     "lib",
-    "dist/tsc",
-    "dynamic",
-    "styler",
-    "server",
-    "styled"
+    "dist/tsc"
   ],
   "keywords": [
-    "styles",
     "react",
-    "angular",
-    "vue",
-    "framework",
-    "css",
-    "css-in-js"
+    "stable",
+    "callback",
+    "hook",
+    "object"
   ],
   "dependencies": {
     "@emotion/css": "11.9.0"

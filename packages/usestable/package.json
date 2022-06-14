@@ -24,9 +24,7 @@
     "hook",
     "object"
   ],
-  "dependencies": {
-    "@emotion/css": "11.9.0"
-  },
+  "dependencies": {},
   "peerDependenciesMeta": {},
   "scripts": {
     "prepublishOnly": "yarn test && yarn && yarn build",

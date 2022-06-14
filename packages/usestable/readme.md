@@ -5,6 +5,7 @@
     - [Stable identity callback](#stable-identity-callback)
     - [Stable component](#stable-component)
     - [Geting fresh values in callbacks](#geting-fresh-values-in-callbacks)
+    - [Using stable object with other React hooks](#using-stable-object-with-other-react-hooks)
     - [Conditional callbacks](#conditional-callbacks)
   - [API reference](#api-reference)
 
@@ -106,6 +107,8 @@ function Chat({ rooms }) {
 
 ### Geting fresh values in callbacks
 
+Sometimes, useEvent fails with async callback
+
 **with useEvent**
 
 ```js
@@ -124,7 +127,7 @@ You must use more useEvent hook to handle above case
 ```js
 const contextVariable = useContext(SomeContext);
 const onDone = useEvent(() => {
-  console.log(contextVariable);
+  // do something with contextVariable
 });
 const callback = useEvent(async () => {
   // the contextVariable is fresh now
@@ -134,7 +137,7 @@ const callback = useEvent(async () => {
 });
 ```
 
-**with useStable**
+**with useStable #1**
 
 ```js
 import { useStable } from "usestable";
@@ -151,7 +154,31 @@ const callback = useCallback(async () => {
 }, [stable]);
 ```
 
-You even use stable object with any React's hook
+**with useStable #2**
+
+```js
+import { useStable } from "usestable";
+
+const contextVariable = useContext(SomeContext);
+// create stable object to hold contextVariable
+const { callback } = useStable({
+  // add contexture variables
+  contextVariable,
+  // define async callback
+  async callback() {
+    // using this object to access stable props
+    // the contextVariable is fresh now
+    console.log(this.contextVariable);
+    await callAsyncMethod();
+    // and it is still fresh now and after. Easy ?
+    console.log(this.contextVariable);
+  },
+});
+```
+
+### Using stable object with other React hooks
+
+You can use stable object with any React's hooks
 
 ```js
 const stable = useStable({

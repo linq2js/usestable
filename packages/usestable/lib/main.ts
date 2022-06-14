@@ -75,24 +75,24 @@ export interface CreatorBuilder extends Function {
 
 export interface UseStable extends Function {
   /**
-   * create stable object
-   */
-  <T extends Record<string, any>>(values: T, options?: Options<T>): T;
-
-  /**
    * create stable object with init function
    */
   <T extends Record<string, any>>(
     init: (
-      create: <TT extends Record<string, any>>(
+      create: <S extends Record<string, any>>(
         key: any,
-        props: TT,
-        options?: Options<TT>
-      ) => TT
+        props: S,
+        options?: Options<S>
+      ) => S
     ) => T,
     update: Partial<T>,
     options?: Options<T>
   ): T;
+
+  /**
+   * create stable object
+   */
+  <T extends Record<string, any>>(values: T, options?: Options<T>): T;
 }
 
 const arraySliceMethod = [].slice;

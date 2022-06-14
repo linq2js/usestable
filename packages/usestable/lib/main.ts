@@ -6,6 +6,7 @@ import {
   HTMLAttributes,
   memo,
   ReactHTML,
+  useEffect,
   useState,
 } from "react";
 
@@ -387,6 +388,12 @@ export const useStable: UseStable = (...args: any[]): any => {
   }
 
   updated.clear();
+
+  useEffect(() => {
+    const { $mount, $unmount } = stableObject.proxy as any;
+    $mount?.();
+    return $unmount;
+  }, [stableObject]);
 
   return stableObject.proxy;
 };

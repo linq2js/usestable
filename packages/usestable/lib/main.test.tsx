@@ -72,7 +72,9 @@ test("useStable", () => {
 
   const Container = () => {
     const [count, setCount] = useState(0);
-    const stable = useStable({ onClick: () => setCount(count + 1) });
+    const stable = useStable({
+      onClick: () => setCount(count + 1),
+    });
     return (
       <div>
         <div data-testid="count">{count}</div>

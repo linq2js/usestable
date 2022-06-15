@@ -73,6 +73,21 @@ export interface CreatorBuilder extends Function {
   ): (...args: TArgs) => T;
 }
 
+export type Stable<T extends Record<string, any>> = {
+  [key in keyof Omit<T, "$extra" | "$dispatch">]: T[key];
+} & (T extends {
+  $extra: infer TExtra;
+  $dispatch: infer TCall;
+}
+  ? TCall extends (...args: any[]) => any
+    ? {
+        [key in keyof TExtra]: TExtra[key] extends (...args: infer TArgs) => any
+          ? (...args: TArgs) => ReturnType<TCall>
+          : never;
+      }
+    : never
+  : {});
+
 export interface UseStable extends Function {
   /**
    * create stable object with init function
@@ -87,12 +102,12 @@ export interface UseStable extends Function {
     ) => T,
     update: Partial<T>,
     options?: Options<T>
-  ): T;
+  ): Stable<T>;
 
   /**
    * create stable object
    */
-  <T extends Record<string, any>>(values: T, options?: Options<T>): T;
+  <T extends Record<string, any>>(values: T, options?: Options<T>): Stable<T>;
 }
 
 const arraySliceMethod = [].slice;
@@ -265,7 +280,10 @@ const createStableObject = (isReactProps = false) => {
         return true;
       },
       get(_, p) {
-        const currentValue = refs.object[p];
+        const getCurrent = () =>
+          refs.object.$extra ? refs.object.$extra[p] : refs.object[p];
+        const currentValue = getCurrent();
+
         if (isReactProps) {
           if (
             p === "key" ||
@@ -286,7 +304,7 @@ const createStableObject = (isReactProps = false) => {
         if (typeof currentValue === "function") {
           // create stable function if cacheValue is not function
           if (typeof cachedValue !== "function") {
-            cachedValue = createStableFunction(() => refs.object[p], proxy);
+            cachedValue = createStableFunction(getCurrent, proxy);
             cache.set(p, cachedValue);
           }
           return cachedValue;
@@ -392,4 +410,16 @@ export const useStable: UseStable = (...args: any[]): any => {
   }, [stableObject]);
 
   return stableObject.proxy;
+};
+
+export const withExtra = <TProps extends Record<string, any>, TResult = any>(
+  props: TProps,
+  invoker: (payload: any) => TResult
+): (<TName extends keyof TProps>(
+  name: TName,
+  ...args: TProps[TName] extends (...args: infer TArgs) => any ? TArgs : []
+) => TResult) => {
+  return (name, ...args: any[]) => {
+    return invoker(props[name](...args));
+  };
 };

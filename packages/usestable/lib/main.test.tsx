@@ -92,3 +92,40 @@ test("useStable", () => {
   // no re-render
   expect(rerenderCount).toBe(1);
 });
+
+test("useStable with extra", () => {
+  let rerenderCount = 0;
+
+  const ClickMe = memo((props: { onClick: VoidFunction }) => {
+    rerenderCount++;
+    return <div data-testid="click-me" onClick={props.onClick} />;
+  });
+
+  const Container = () => {
+    const [count, setCount] = useState(0);
+    const stable = useStable({
+      $extra: {
+        increment: () => count + 1,
+        dispatch: setCount,
+      },
+      onClick() {
+        this.$extra.increment();
+      },
+    });
+    return (
+      <div>
+        <div data-testid="count">{count}</div>
+        <ClickMe onClick={stable.onClick} />
+      </div>
+    );
+  };
+  const { getByTestId } = render(<Container />);
+  // first rendering
+  expect(rerenderCount).toBe(1);
+  expect(getByTestId("count").textContent).toBe("0");
+  // update count
+  fireEvent.click(getByTestId("click-me"));
+  expect(getByTestId("count").textContent).toBe("1");
+  // no re-render
+  expect(rerenderCount).toBe(1);
+});

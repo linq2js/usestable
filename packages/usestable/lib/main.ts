@@ -74,18 +74,19 @@ export interface CreatorBuilder extends Function {
 }
 
 export type Stable<T extends Record<string, any>> = {
-  [key in keyof Omit<T, "$extra" | "$dispatch">]: T[key];
+  [key in keyof Omit<T, "$extra">]: T[key];
 } & (T extends {
   $extra: infer TExtra;
-  $dispatch: infer TCall;
 }
-  ? TCall extends (...args: any[]) => any
+  ? TExtra extends Record<string, any>
     ? {
         [key in keyof TExtra]: TExtra[key] extends (...args: infer TArgs) => any
-          ? (...args: TArgs) => ReturnType<TCall>
+          ? (
+              ...args: TArgs
+            ) => TExtra["dispatch"] extends () => infer TResult ? TResult : any
           : never;
       }
-    : never
+    : {}
   : {});
 
 export interface UseStable extends Function {
@@ -259,7 +260,7 @@ const createStableObject = (isReactProps = false) => {
     object: {},
   };
   const cache = new Map<any, any>();
-  const proxy = new Proxy(
+  const proxy: any = new Proxy(
     {},
     {
       set(_, p, value) {
@@ -280,8 +281,22 @@ const createStableObject = (isReactProps = false) => {
         return true;
       },
       get(_, p) {
-        const getCurrent = () =>
-          refs.object.$extra ? refs.object.$extra[p] : refs.object[p];
+        if (p === "$extra") return proxy;
+
+        const getCurrent = () => {
+          if (refs.object.$extra) {
+            const extraValue = refs.object.$extra[p];
+            if (typeof extraValue === "function") {
+              const dispatch = refs.object.$extra.dispatch;
+              // skip wrapping if calling dispatch function
+              if (!dispatch || extraValue === dispatch) return extraValue;
+              return (...args: any[]) => {
+                return dispatch(extraValue(...args));
+              };
+            }
+          }
+          return refs.object[p];
+        };
         const currentValue = getCurrent();
 
         if (isReactProps) {

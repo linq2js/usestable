@@ -37,29 +37,39 @@ export interface Options<P = any> {
   compare?: CompareOption;
 }
 
-export interface StatableFn {
+export type ComponentProps<C> = C extends (props: infer TProps) => any
+  ? TProps
+  : C extends FC<infer TProps>
+  ? TProps
+  : C extends Component<infer TProps>
+  ? TProps
+  : never;
+
+export interface StableFn {
+  /**
+   * create stable component from tag name
+   */
+  <P extends HTMLAttributes<T>, T extends HTMLElement>(
+    type: keyof ReactHTML
+  ): FC<(ClassAttributes<T> & P) | null>;
+
   /**
    * create stable component from tag name
    */
   <P extends HTMLAttributes<T>, T extends HTMLElement>(
     type: keyof ReactHTML,
-    options?: Options<(ClassAttributes<T> & P) | null>
+    options: Options<(ClassAttributes<T> & P) | null>
   ): FC<(ClassAttributes<T> & P) | null>;
 
   /**
    * create stable component with an options
    */
-  <
-    C,
-    P extends C extends FC<infer TProps>
-      ? TProps
-      : C extends Component<infer TProps>
-      ? TProps
-      : never
-  >(
-    component: C,
-    options?: Options<P>
-  ): FC<P>;
+  <C, P extends ComponentProps<C>>(component: C): FC<P>;
+
+  /**
+   * create stable component with an options
+   */
+  <C, P extends ComponentProps<C>>(component: C, options: Options<P>): FC<P>;
 }
 
 export interface CreatorBuilder extends Function {
@@ -365,7 +375,7 @@ const createStableObject = (isReactProps = false) => {
  * @param options
  * @returns
  */
-export const stable: StatableFn = (component: any, options?: Options): any => {
+export const stable: StableFn = (component: any, options?: Options): any => {
   const Memoized = typeof component === "string" ? component : memo(component);
 
   const Wrapper = (props: any) => {

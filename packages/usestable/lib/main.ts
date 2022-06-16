@@ -448,3 +448,12 @@ export const withExtra = <TProps extends Record<string, any>, TResult = any>(
     return invoker(props[name](...args));
   };
 };
+
+/**
+ * execute the callback once and return its result
+ * @param callback
+ * @returns
+ */
+export const useInit = <T>(callback: () => T) => {
+  return useState(callback)[0];
+};

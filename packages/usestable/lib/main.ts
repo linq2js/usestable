@@ -461,12 +461,7 @@ export interface ComponentBuilder<TProps = {}> {
   /**
    * end component building and return a component
    */
-  end(): FC<TProps> & {
-    /**
-     * for typing only
-     */
-    props: TProps;
-  };
+  end(): FC<TProps>;
 }
 
 /**
@@ -478,7 +473,7 @@ export const create = <T>(
   component: Component<T> | FC<T>
 ): ComponentBuilder<T> => {
   const propMap: Record<string, string> = {};
-  const wrappers: Function[] = [];
+  const hocs: Function[] = [];
 
   return {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -487,7 +482,7 @@ export const create = <T>(
       return this;
     },
     use(hoc: Function, ...args: any[]) {
-      wrappers.push((component: any) => hoc(component, ...args));
+      hocs.push((component: any) => hoc(component, ...args));
       return this;
     },
     end() {
@@ -503,18 +498,13 @@ export const create = <T>(
             mappedProps[key] = value;
           }
         });
-        if (ref) {
-          mappedProps["ref"] = ref;
-        }
-        let compoudComponent: any = createElement(component as FC, mappedProps);
 
-        if (wrappers.length) {
-          compoudComponent = wrappers.reduce(
-            (prev, wrapper) => wrapper(prev),
-            compoudComponent
-          );
-        }
-        return compoudComponent;
+        if (ref) mappedProps["ref"] = ref;
+
+        return createElement(
+          hocs.reduce((prev, hoc) => hoc(prev), component) as FC,
+          mappedProps
+        );
       };
       return forwardRef(builtComponent);
     },

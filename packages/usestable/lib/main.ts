@@ -437,10 +437,20 @@ export const useInit = <T>(callback: () => T) => {
 };
 
 export interface ComponentBuilder<TProps = {}> {
+  /**
+   * create component prop with specified valid values
+   * @param name
+   * @param values
+   */
   prop<TValue extends string>(
     name: keyof TProps,
     values: TValue[]
   ): ComponentBuilder<TProps & { [key in TValue]?: boolean }>;
+  /**
+   * use HOC
+   * @param hoc
+   * @param args
+   */
   use<TNewProps, TArgs extends any[]>(
     hoc: (
       component: FC<TProps>,
@@ -448,7 +458,15 @@ export interface ComponentBuilder<TProps = {}> {
     ) => Component<TNewProps> | FC<TNewProps>,
     ...args: TArgs
   ): ComponentBuilder<TNewProps>;
-  end(): FC<TProps>;
+  /**
+   * end component building and return a component
+   */
+  end(): FC<TProps> & {
+    /**
+     * for typing only
+     */
+    props: TProps;
+  };
 }
 
 /**

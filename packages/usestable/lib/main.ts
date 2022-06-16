@@ -1,11 +1,9 @@
 import {
-  ClassAttributes,
   Component,
   createElement,
   FC,
-  HTMLAttributes,
+  forwardRef,
   memo,
-  ReactHTML,
   useEffect,
   useState,
 } from "react";
@@ -47,29 +45,9 @@ export type ComponentProps<C> = C extends (props: infer TProps) => any
 
 export interface StableFn {
   /**
-   * create stable component from tag name
-   */
-  <P extends HTMLAttributes<T>, T extends HTMLElement>(
-    type: keyof ReactHTML
-  ): FC<(ClassAttributes<T> & P) | null>;
-
-  /**
-   * create stable component from tag name
-   */
-  <P extends HTMLAttributes<T>, T extends HTMLElement>(
-    type: keyof ReactHTML,
-    options: Options<(ClassAttributes<T> & P) | null>
-  ): FC<(ClassAttributes<T> & P) | null>;
-
-  /**
    * create stable component with an options
    */
-  <C, P extends ComponentProps<C>>(component: C): FC<P>;
-
-  /**
-   * create stable component with an options
-   */
-  <C, P extends ComponentProps<C>>(component: C, options: Options<P>): FC<P>;
+  <C, P extends ComponentProps<C>>(component: C, options?: Options<P>): FC<P>;
 }
 
 export interface CreatorBuilder extends Function {
@@ -378,13 +356,13 @@ const createStableObject = (isReactProps = false) => {
 export const stable: StableFn = (component: any, options?: Options): any => {
   const Memoized = typeof component === "string" ? component : memo(component);
 
-  const Wrapper = (props: any) => {
+  const Wrapper = (props: any, ref: any) => {
     const stableObject = useState(() => createStableObject(true))[0];
-    stableObject.update(props, options);
+    stableObject.update({ ...props, ref }, options);
     return createElement(Memoized, stableObject.proxy);
   };
 
-  return Wrapper;
+  return forwardRef(Wrapper);
 };
 
 /**
@@ -456,4 +434,71 @@ export const withExtra = <TProps extends Record<string, any>, TResult = any>(
  */
 export const useInit = <T>(callback: () => T) => {
   return useState(callback)[0];
+};
+
+export interface ComponentBuilder<TProps = {}> {
+  prop<TValue extends string>(
+    name: keyof TProps,
+    values: TValue[]
+  ): ComponentBuilder<TProps & { [key in TValue]?: boolean }>;
+  use<TNewProps, TArgs extends any[]>(
+    hoc: (
+      component: FC<TProps>,
+      ...args: TArgs
+    ) => Component<TNewProps> | FC<TNewProps>,
+    ...args: TArgs
+  ): ComponentBuilder<TNewProps>;
+  end(): FC<TProps>;
+}
+
+/**
+ * create a component with special props and HOC
+ * @param component
+ * @returns
+ */
+export const create = <T>(
+  component: Component<T> | FC<T>
+): ComponentBuilder<T> => {
+  const propMap: Record<string, string> = {};
+  const wrappers: Function[] = [];
+
+  return {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    prop(name: string, values: string[]) {
+      values.forEach((value) => (propMap[value] = name));
+      return this;
+    },
+    use(hoc: Function, ...args: any[]) {
+      wrappers.push((component: any) => hoc(component, ...args));
+      return this;
+    },
+    end() {
+      const builtComponent = (props: Record<string, unknown>, ref: unknown) => {
+        const mappedProps: Record<string, unknown> = {};
+        Object.entries(props).forEach(([key, value]) => {
+          const mapTo = propMap[key];
+          if (mapTo) {
+            if (value) {
+              mappedProps[mapTo] = key;
+            }
+          } else {
+            mappedProps[key] = value;
+          }
+        });
+        if (ref) {
+          mappedProps["ref"] = ref;
+        }
+        let compoudComponent: any = createElement(component as FC, mappedProps);
+
+        if (wrappers.length) {
+          compoudComponent = wrappers.reduce(
+            (prev, wrapper) => wrapper(prev),
+            compoudComponent
+          );
+        }
+        return compoudComponent;
+      };
+      return forwardRef(builtComponent);
+    },
+  } as unknown as ComponentBuilder<T>;
 };

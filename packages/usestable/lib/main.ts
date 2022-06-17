@@ -570,40 +570,39 @@ export const create = <C>(
       return this;
     },
     end() {
-      let CompoundComponent = (
-        props: Record<string, unknown>,
-        ref: unknown
-      ) => {
-        const mappedProps: Record<string, unknown> = {};
-        // optimize performance
-        if (hasMapper || hasPropMap) {
-          Object.entries(props).forEach(([key, value]) => {
-            const mapper = mappers[key];
-            if (mapper) {
-              value = mapper(value, props);
-            }
-            const mapTo = propMap[key];
-            if (mapTo) {
-              // is computed prop
-              if (typeof mapTo === "function") {
-                Object.assign(mappedProps, mapTo(value, props));
-              } else {
-                if (value && typeof mappedProps[mapTo] !== "undefined") {
-                  mappedProps[mapTo] = key;
-                }
+      let CompoundComponent = forwardRef(
+        (props: Record<string, unknown>, ref: unknown) => {
+          const mappedProps: Record<string, unknown> = {};
+          // optimize performance
+          if (hasMapper || hasPropMap) {
+            Object.entries(props).forEach(([key, value]) => {
+              const mapper = mappers[key];
+              if (mapper) {
+                value = mapper(value, props);
               }
-            } else {
-              mappedProps[key] = value;
-            }
-          });
-        } else {
-          Object.assign(mappedProps, props);
+              const mapTo = propMap[key];
+              if (mapTo) {
+                // is computed prop
+                if (typeof mapTo === "function") {
+                  Object.assign(mappedProps, mapTo(value, props));
+                } else {
+                  if (value && typeof mappedProps[mapTo] !== "undefined") {
+                    mappedProps[mapTo] = key;
+                  }
+                }
+              } else {
+                mappedProps[key] = value;
+              }
+            });
+          } else {
+            Object.assign(mappedProps, props);
+          }
+
+          if (ref) mappedProps["ref"] = ref;
+
+          return createElement(component as any, mappedProps);
         }
-
-        if (ref) mappedProps["ref"] = ref;
-
-        return createElement(component as any, mappedProps);
-      };
+      );
 
       if (hocs.length) {
         CompoundComponent = hocs.reduce(
@@ -612,7 +611,7 @@ export const create = <C>(
         ) as any;
       }
 
-      return forwardRef(CompoundComponent);
+      return CompoundComponent;
     },
   } as any;
 };

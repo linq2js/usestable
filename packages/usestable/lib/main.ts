@@ -532,11 +532,18 @@ export const create = <C>(
   const propMap: Record<string, string | Function> = {};
   const hocs: Function[] = [];
   const mappers: Record<string, Function> = {};
+  let hasMapper = false;
+  let hasPropMap = false;
 
   return {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    prop(name: string, values: string[]) {
-      values.forEach((value) => (propMap[value] = name));
+    prop(name: string, values: string[] | Function) {
+      if (Array.isArray(values)) {
+        values.forEach((value) => (propMap[value] = name));
+      } else {
+        propMap[name] = values;
+      }
+      hasPropMap = true;
       return this;
     },
     use(hoc: Function, ...args: any[]) {
@@ -551,6 +558,7 @@ export const create = <C>(
     },
     map(name: string, mapper: Function) {
       mappers[name] = mapper;
+      hasMapper = true;
       return this;
     },
     memo(areEqual: Function) {
@@ -562,36 +570,49 @@ export const create = <C>(
       return this;
     },
     end() {
-      const Compound = (props: Record<string, unknown>, ref: unknown) => {
+      let CompoundComponent = (
+        props: Record<string, unknown>,
+        ref: unknown
+      ) => {
         const mappedProps: Record<string, unknown> = {};
-        Object.entries(props).forEach(([key, value]) => {
-          const mapper = mappers[key];
-          if (mapper) {
-            value = mapper(value, props);
-          }
-          const mapTo = propMap[key];
-          if (mapTo) {
-            // is computed prop
-            if (typeof mapTo === "function") {
-              Object.assign(mappedProps, mapTo(value, props));
-            } else {
-              if (value && typeof mappedProps[mapTo] !== "undefined") {
-                mappedProps[mapTo] = key;
-              }
+        // optimize performance
+        if (hasMapper || hasPropMap) {
+          Object.entries(props).forEach(([key, value]) => {
+            const mapper = mappers[key];
+            if (mapper) {
+              value = mapper(value, props);
             }
-          } else {
-            mappedProps[key] = value;
-          }
-        });
+            const mapTo = propMap[key];
+            if (mapTo) {
+              // is computed prop
+              if (typeof mapTo === "function") {
+                Object.assign(mappedProps, mapTo(value, props));
+              } else {
+                if (value && typeof mappedProps[mapTo] !== "undefined") {
+                  mappedProps[mapTo] = key;
+                }
+              }
+            } else {
+              mappedProps[key] = value;
+            }
+          });
+        } else {
+          Object.assign(mappedProps, props);
+        }
 
         if (ref) mappedProps["ref"] = ref;
 
-        return createElement(
-          hocs.reduce((prev, hoc) => hoc(prev), component as any) as FC,
-          mappedProps
-        );
+        return createElement(component as any, mappedProps);
       };
-      return forwardRef(Compound);
+
+      if (hocs.length) {
+        CompoundComponent = hocs.reduce(
+          (prev, hoc) => hoc(prev),
+          CompoundComponent
+        ) as any;
+      }
+
+      return forwardRef(CompoundComponent);
     },
   } as any;
 };

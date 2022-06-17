@@ -2,6 +2,7 @@ import {
   Component,
   createElement,
   FC,
+  ForwardedRef,
   forwardRef,
   memo,
   useEffect,
@@ -436,16 +437,46 @@ export const useInit = <T>(callback: () => T) => {
   return useState(callback)[0];
 };
 
-export interface ComponentBuilder<TProps = {}> {
+export interface ComponentBuilder<O, P = O> {
   /**
    * create component prop with specified valid values
    * @param name
    * @param values
    */
   prop<TValue extends string>(
-    name: keyof TProps,
+    name: keyof O,
     values: TValue[]
-  ): ComponentBuilder<TProps & { [key in TValue]?: boolean }>;
+  ): ComponentBuilder<O, P & { [key in TValue]?: boolean }>;
+
+  /**
+   * create computed prop
+   * @param name
+   * @param compute
+   */
+  prop<TName extends string = string, TValue = unknown>(
+    name: TName,
+    compute: (value: TValue, props: P) => Partial<O>
+  ): ComponentBuilder<
+    O,
+    P &
+      // optional prop
+      (TValue extends undefined
+        ? { [key in TName]?: TValue }
+        : { [key in TName]: TValue })
+  >;
+
+  /**
+   * use renderFn to render compound component, the renderFn retrives compound component, input props, ref
+   * @param renderFn
+   */
+  render<TNewProps, TRef>(
+    renderFn: (
+      component: FC<P>,
+      props: TNewProps,
+      ref: ForwardedRef<TRef>
+    ) => any
+  ): ComponentBuilder<O, TNewProps>;
+
   /**
    * use HOC
    * @param hoc
@@ -453,15 +484,16 @@ export interface ComponentBuilder<TProps = {}> {
    */
   use<TNewProps, TArgs extends any[]>(
     hoc: (
-      component: FC<TProps>,
+      component: FC<P>,
       ...args: TArgs
     ) => Component<TNewProps> | FC<TNewProps>,
     ...args: TArgs
-  ): ComponentBuilder<TNewProps>;
+  ): ComponentBuilder<O, TNewProps>;
+
   /**
-   * end component building and return a component
+   * end  building process and return a component
    */
-  end(): FC<TProps>;
+  end(): FC<P>;
 }
 
 /**
@@ -472,7 +504,7 @@ export interface ComponentBuilder<TProps = {}> {
 export const create = <T>(
   component: Component<T> | FC<T>
 ): ComponentBuilder<T> => {
-  const propMap: Record<string, string> = {};
+  const propMap: Record<string, string | Function> = {};
   const hocs: Function[] = [];
 
   return {
@@ -485,14 +517,25 @@ export const create = <T>(
       hocs.push((component: any) => hoc(component, ...args));
       return this;
     },
+    render(renderFn: Function) {
+      hocs.push((component: any) =>
+        forwardRef((props, ref) => renderFn(component, props, ref))
+      );
+      return this;
+    },
     end() {
-      const builtComponent = (props: Record<string, unknown>, ref: unknown) => {
+      const Compound = (props: Record<string, unknown>, ref: unknown) => {
         const mappedProps: Record<string, unknown> = {};
         Object.entries(props).forEach(([key, value]) => {
           const mapTo = propMap[key];
           if (mapTo) {
-            if (value) {
-              mappedProps[mapTo] = key;
+            // is computed prop
+            if (typeof mapTo === "function") {
+              Object.assign(mappedProps, mapTo(value, props));
+            } else {
+              if (value && typeof mappedProps[mapTo] !== "undefined") {
+                mappedProps[mapTo] = key;
+              }
             }
           } else {
             mappedProps[key] = value;
@@ -506,7 +549,7 @@ export const create = <T>(
           mappedProps
         );
       };
-      return forwardRef(builtComponent);
+      return forwardRef(Compound);
     },
   } as unknown as ComponentBuilder<T>;
 };

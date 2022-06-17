@@ -510,7 +510,12 @@ export interface ComponentBuilder<O, P = O> {
   /**
    * end  building process and return a component
    */
-  end(): FC<P>;
+  end(): FC<P> & {
+    /**
+     * for typing only, DO NOT USE this for getting value
+     */
+    props: P;
+  };
 }
 
 /**

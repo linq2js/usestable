@@ -1,4 +1,4 @@
-import { stable, useStable } from "./main";
+import { create, stable, useStable } from "./main";
 import { fireEvent, render } from "@testing-library/react";
 import React, { memo, useState } from "react";
 
@@ -128,4 +128,12 @@ test("useStable with extra", () => {
   expect(getByTestId("count").textContent).toBe("1");
   // no re-render
   expect(rerenderCount).toBe(1);
+});
+
+test("create", () => {
+  const R = create(<T,>(props: { obj: T; name: keyof T }) => {
+    return <>{props.name}</>;
+  }).end();
+
+  <R obj={{ aaa: 1, bb: 2 }} name="bb" />;
 });

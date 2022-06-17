@@ -437,7 +437,7 @@ export const useInit = <T>(callback: () => T) => {
   return useState(callback)[0];
 };
 
-export interface ComponentBuilder<O, P = O> {
+export interface ComponentBuilder<C, O, P = O> {
   /**
    * create component prop with specified valid values
    * @param name
@@ -446,7 +446,7 @@ export interface ComponentBuilder<O, P = O> {
   prop<TValue extends string>(
     name: keyof O,
     values: TValue[]
-  ): ComponentBuilder<O, P & { [key in TValue]?: boolean }>;
+  ): ComponentBuilder<null, O, P & { [key in TValue]?: boolean }>;
 
   /**
    * apply memoizing for compound component
@@ -469,6 +469,7 @@ export interface ComponentBuilder<O, P = O> {
     name: TName,
     compute: (value: TValue, props: P) => Partial<O>
   ): ComponentBuilder<
+    null,
     O,
     P &
       // optional prop
@@ -480,37 +481,37 @@ export interface ComponentBuilder<O, P = O> {
   map<TName extends keyof O, TValue = O[TName]>(
     name: TName,
     mapper: (value: TValue, props: P) => O[TName]
-  ): ComponentBuilder<O, P & { [key in TName]: TValue }>;
+  ): ComponentBuilder<null, O, P & { [key in TName]: TValue }>;
 
   /**
    * use renderFn to render compound component, the renderFn retrives compound component, input props, ref
    * @param renderFn
    */
-  render<TNewProps, TRef>(
+  render<TNewProps = P, TRef = any>(
     renderFn: (
       component: FC<P>,
       props: TNewProps,
       ref: ForwardedRef<TRef>
     ) => any
-  ): ComponentBuilder<O, TNewProps>;
+  ): ComponentBuilder<null, O, TNewProps>;
 
   /**
    * use HOC
    * @param hoc
    * @param args
    */
-  use<TNewProps, TArgs extends any[]>(
+  use<TNewProps = P, TArgs extends any[] = []>(
     hoc: (
       component: FC<P>,
       ...args: TArgs
     ) => Component<TNewProps> | FC<TNewProps>,
     ...args: TArgs
-  ): ComponentBuilder<O, TNewProps>;
+  ): ComponentBuilder<null, O, TNewProps>;
 
   /**
    * end  building process and return a component
    */
-  end(): FC<P> & {
+  end(): (C extends null ? FC<P> : C) & {
     /**
      * for typing only, DO NOT USE this for getting value
      */
@@ -518,14 +519,16 @@ export interface ComponentBuilder<O, P = O> {
   };
 }
 
+export type AnyComponent<P> = Component<P> | FC<P>;
+
 /**
  * create a component with special props and HOC
  * @param component
  * @returns
  */
-export const create = <T>(
-  component: Component<T> | FC<T>
-): ComponentBuilder<T> => {
+export const create = <C>(
+  component: C
+): C extends AnyComponent<infer P> ? ComponentBuilder<C, P, P> : never => {
   const propMap: Record<string, string | Function> = {};
   const hocs: Function[] = [];
   const mappers: Record<string, Function> = {};
@@ -584,11 +587,11 @@ export const create = <T>(
         if (ref) mappedProps["ref"] = ref;
 
         return createElement(
-          hocs.reduce((prev, hoc) => hoc(prev), component) as FC,
+          hocs.reduce((prev, hoc) => hoc(prev), component as any) as FC,
           mappedProps
         );
       };
       return forwardRef(Compound);
     },
-  } as unknown as ComponentBuilder<T>;
+  } as any;
 };

@@ -130,10 +130,25 @@ test("useStable with extra", () => {
   expect(rerenderCount).toBe(1);
 });
 
-test("create", () => {
+test("create with generic type", () => {
   const R = create(<T,>(props: { obj: T; name: keyof T }) => {
     return <>{props.name}</>;
   }).end();
 
   <R obj={{ aaa: 1, bb: 2 }} name="bb" />;
+});
+
+test("create", () => {
+  let renderCount = 0;
+  const Container = create(() => {
+    renderCount++;
+    return <div data-testid="test">test</div>;
+  })
+    .memo()
+    .end();
+  const { getByTestId, rerender } = render(<Container />);
+  expect(getByTestId("test").textContent).toBe("test");
+  rerender(<Container />);
+  rerender(<Container />);
+  expect(renderCount).toBe(1);
 });

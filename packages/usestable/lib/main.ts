@@ -449,6 +449,18 @@ export interface ComponentBuilder<O, P = O> {
   ): ComponentBuilder<O, P & { [key in TValue]?: boolean }>;
 
   /**
+   * apply memoizing for compound component
+   * @param areEqual
+   */
+  memo(areEqual?: (prev: P, next: P) => boolean): this;
+
+  /**
+   * apply stabling for compound component
+   * @param options
+   */
+  stable(options?: Options<P>): this;
+
+  /**
    * create computed prop
    * @param name
    * @param compute
@@ -464,6 +476,11 @@ export interface ComponentBuilder<O, P = O> {
         ? { [key in TName]?: TValue }
         : { [key in TName]: TValue })
   >;
+
+  map<TName extends keyof O, TValue = O[TName]>(
+    name: TName,
+    mapper: (value: TValue, props: P) => O[TName]
+  ): ComponentBuilder<O, P & { [key in TName]: TValue }>;
 
   /**
    * use renderFn to render compound component, the renderFn retrives compound component, input props, ref
@@ -506,6 +523,7 @@ export const create = <T>(
 ): ComponentBuilder<T> => {
   const propMap: Record<string, string | Function> = {};
   const hocs: Function[] = [];
+  const mappers: Record<string, Function> = {};
 
   return {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -523,10 +541,26 @@ export const create = <T>(
       );
       return this;
     },
+    map(name: string, mapper: Function) {
+      mappers[name] = mapper;
+      return this;
+    },
+    memo(areEqual: Function) {
+      hocs.push((component: any) => memo(component, areEqual as any));
+      return this;
+    },
+    stable(options: any) {
+      hocs.push((component: any) => stable(component, options as any));
+      return this;
+    },
     end() {
       const Compound = (props: Record<string, unknown>, ref: unknown) => {
         const mappedProps: Record<string, unknown> = {};
         Object.entries(props).forEach(([key, value]) => {
+          const mapper = mappers[key];
+          if (mapper) {
+            value = mapper(value, props);
+          }
           const mapTo = propMap[key];
           if (mapTo) {
             // is computed prop

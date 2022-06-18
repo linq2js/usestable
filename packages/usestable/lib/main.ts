@@ -586,7 +586,7 @@ export const create = <C>(
                 if (typeof mapTo === "function") {
                   Object.assign(mappedProps, mapTo(value, props));
                 } else {
-                  if (value && typeof mappedProps[mapTo] !== "undefined") {
+                  if (value && typeof mappedProps[mapTo] === "undefined") {
                     mappedProps[mapTo] = key;
                   }
                 }

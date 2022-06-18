@@ -481,7 +481,14 @@ export interface ComponentBuilder<C, O, P = O> {
   map<TName extends keyof O, TValue = O[TName]>(
     name: TName,
     mapper: (value: TValue, props: P) => O[TName]
-  ): ComponentBuilder<null, O, P & { [key in TName]: TValue }>;
+  ): ComponentBuilder<
+    null,
+    O,
+    P &
+      (TValue extends undefined
+        ? { [key in TName]?: TValue }
+        : { [key in TName]: TValue })
+  >;
 
   /**
    * use renderFn to render compound component, the renderFn retrives compound component, input props, ref

@@ -131,11 +131,21 @@ test("useStable with extra", () => {
 });
 
 test("create with generic type", () => {
-  const R = create(<T,>(props: { obj: T; name: keyof T }) => {
+  const R = create(<T,>(props: { obj: T; name: keyof T; other?: number }) => {
     return <>{props.name}</>;
   }).end();
 
   <R obj={{ aaa: 1, bb: 2 }} name="bb" />;
+});
+
+test("prop() with map", () => {
+  const C = create((props: { size?: "small" | "large" | "medium" }) => (
+    <div data-testid="output">{props.size}</div>
+  ))
+    .prop("size", { sm: "small", lg: "large" })
+    .end();
+  const { getByTestId } = render(<C sm />);
+  expect(getByTestId("output").textContent).toBe("small");
 });
 
 test("create", () => {

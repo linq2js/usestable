@@ -478,6 +478,11 @@ export interface ComponentBuilder<C, O, P = O> {
         : { [key in TName]: TValue })
   >;
 
+  prop<TName extends keyof P, TMap extends Record<string, P[TName]>>(
+    name: TName,
+    map: TMap
+  ): ComponentBuilder<void, O, P & { [key in keyof TMap]?: boolean }>;
+
   map<TName extends keyof O, TValue = O[TName]>(
     name: TName,
     mapper: (value: TValue, props: P) => O[TName]
@@ -490,10 +495,10 @@ export interface ComponentBuilder<C, O, P = O> {
         : { [key in TName]: TValue })
   >;
 
-  rename<TOld extends keyof O, TNew extends string>(
+  rename<TOld extends keyof P, TNew extends string>(
     oldName: TOld,
     newName: TNew
-  ): ComponentBuilder<void, O, Omit<P, TOld> & { [key in TNew]: O[TOld] }>;
+  ): ComponentBuilder<void, O, Omit<P, TOld> & { [key in TNew]: P[TOld] }>;
 
   /**
    * use renderFn to render compound component, the renderFn retrives compound component, input props, ref
@@ -542,7 +547,8 @@ export const create = <C>(
   component: C
 ): C extends AnyComponent<infer P> ? ComponentBuilder<C, P, P> : never => {
   const oldNames: Record<string, string> = {};
-  const singlePropMappings: Record<string, string> = {};
+  const singlePropMappings: Record<string, { prop: string; value: string }> =
+    {};
   const multiplePropMappings: Record<string, Function> = {};
   const hocs: Function[] = [];
   const mappers: Record<string, Function> = {};
@@ -565,8 +571,8 @@ export const create = <C>(
     } else {
       const mapTo = singlePropMappings[name];
       if (mapTo) {
-        value = name;
-        name = mapTo;
+        value = mapTo.value;
+        name = mapTo.prop;
       }
       const mapper = mappers[name];
       if (mapper) value = mapper(value, inputProps);
@@ -580,9 +586,15 @@ export const create = <C>(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     prop(name: string, values: string[] | Function) {
       if (Array.isArray(values)) {
-        values.forEach((value) => (singlePropMappings[value] = name));
-      } else {
+        values.forEach((value) => {
+          singlePropMappings[value] = { prop: name, value: value };
+        });
+      } else if (typeof values === "function") {
         multiplePropMappings[name] = values;
+      } else {
+        Object.entries(values).forEach(([key, value]) => {
+          singlePropMappings[key] = { prop: name, value: value as string };
+        });
       }
       hasPropMap = true;
       return this;

@@ -557,6 +557,11 @@ export const create = <C>(
         setProp(inputProps, targetProps, key, value);
       });
     } else {
+      const mapTo = singlePropMappings[name];
+      if (mapTo) {
+        value = name;
+        name = mapTo;
+      }
       const mapper = mappers[name];
       if (mapper) value = mapper(value, inputProps);
       targetProps[name] = value;

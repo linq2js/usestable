@@ -490,6 +490,11 @@ export interface ComponentBuilder<C, O, P = O> {
         : { [key in TName]: TValue })
   >;
 
+  rename<TOld extends keyof O, TNew extends string>(
+    oldName: TOld,
+    newName: TNew
+  ): ComponentBuilder<void, O, Omit<P, TOld> & { [key in TNew]: O[TOld] }>;
+
   /**
    * use renderFn to render compound component, the renderFn retrives compound component, input props, ref
    * @param renderFn
@@ -536,6 +541,7 @@ export type AnyComponent<P> = Component<P> | FC<P>;
 export const create = <C>(
   component: C
 ): C extends AnyComponent<infer P> ? ComponentBuilder<C, P, P> : never => {
+  const oldNames: Record<string, string> = {};
   const singlePropMappings: Record<string, string> = {};
   const multiplePropMappings: Record<string, Function> = {};
   const hocs: Function[] = [];
@@ -549,7 +555,7 @@ export const create = <C>(
     name: string,
     value: any
   ) => {
-    if (typeof targetProps[name] !== "undefined") return;
+    name = oldNames[name] || name;
     const multiplePropMapping = multiplePropMappings[name];
     if (multiplePropMapping) {
       const newProps = multiplePropMapping(value, inputProps);
@@ -564,7 +570,9 @@ export const create = <C>(
       }
       const mapper = mappers[name];
       if (mapper) value = mapper(value, inputProps);
-      targetProps[name] = value;
+      if (typeof targetProps[name] === "undefined") {
+        targetProps[name] = value;
+      }
     }
   };
 
@@ -581,6 +589,12 @@ export const create = <C>(
     },
     use(hoc: Function, ...args: any[]) {
       hocs.push((component: any) => hoc(component, ...args));
+      return this;
+    },
+    rename(oldName: string, newName: string) {
+      if (oldName !== newName) {
+        oldNames[newName] = oldName;
+      }
       return this;
     },
     render(renderFn: Function) {

@@ -478,7 +478,12 @@ export interface ComponentBuilder<C, O, P = O> {
         : { [key in TName]: TValue })
   >;
 
-  prop<TName extends keyof P, TMap extends Record<string, P[TName]>>(
+  /**
+   * create new prop that has specified values
+   * @param name
+   * @param map
+   */
+  prop<TName extends keyof O, TMap extends Record<string, string>>(
     name: TName,
     map: TMap
   ): ComponentBuilder<void, O, P & { [key in keyof TMap]?: boolean }>;

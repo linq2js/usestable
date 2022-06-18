@@ -446,7 +446,7 @@ export interface ComponentBuilder<C, O, P = O> {
   prop<TValue extends string>(
     name: keyof O,
     values: TValue[]
-  ): ComponentBuilder<null, O, P & { [key in TValue]?: boolean }>;
+  ): ComponentBuilder<void, O, P & { [key in TValue]?: boolean }>;
 
   /**
    * apply memoizing for compound component
@@ -469,11 +469,11 @@ export interface ComponentBuilder<C, O, P = O> {
     name: TName,
     compute: (value: TValue, props: P) => Partial<O>
   ): ComponentBuilder<
-    null,
+    void,
     O,
     P &
       // optional prop
-      (TValue extends undefined
+      (TValue extends void
         ? { [key in TName]?: TValue }
         : { [key in TName]: TValue })
   >;
@@ -482,10 +482,10 @@ export interface ComponentBuilder<C, O, P = O> {
     name: TName,
     mapper: (value: TValue, props: P) => O[TName]
   ): ComponentBuilder<
-    null,
+    void,
     O,
     P &
-      (TValue extends undefined
+      (TValue extends void
         ? { [key in TName]?: TValue }
         : { [key in TName]: TValue })
   >;
@@ -500,7 +500,7 @@ export interface ComponentBuilder<C, O, P = O> {
       props: TNewProps,
       ref: ForwardedRef<TRef>
     ) => any
-  ): ComponentBuilder<null, O, TNewProps>;
+  ): ComponentBuilder<void, O, TNewProps>;
 
   /**
    * use HOC
@@ -513,12 +513,12 @@ export interface ComponentBuilder<C, O, P = O> {
       ...args: TArgs
     ) => Component<TNewProps> | FC<TNewProps>,
     ...args: TArgs
-  ): ComponentBuilder<null, O, TNewProps>;
+  ): ComponentBuilder<void, O, TNewProps>;
 
   /**
    * end  building process and return a component
    */
-  end(): (C extends null ? FC<P> : C) & {
+  end(): (C extends void ? FC<P> : C) & {
     /**
      * for typing only, DO NOT USE this for getting value
      */
@@ -536,19 +536,40 @@ export type AnyComponent<P> = Component<P> | FC<P>;
 export const create = <C>(
   component: C
 ): C extends AnyComponent<infer P> ? ComponentBuilder<C, P, P> : never => {
-  const propMap: Record<string, string | Function> = {};
+  const singlePropMappings: Record<string, string> = {};
+  const multiplePropMappings: Record<string, Function> = {};
   const hocs: Function[] = [];
   const mappers: Record<string, Function> = {};
   let hasMapper = false;
   let hasPropMap = false;
 
+  const setProp = (
+    inputProps: Record<string, any>,
+    targetProps: Record<string, any>,
+    name: string,
+    value: any
+  ) => {
+    if (typeof targetProps[name] !== "undefined") return;
+    const multiplePropMapping = multiplePropMappings[name];
+    if (multiplePropMapping) {
+      const newProps = multiplePropMapping(value, inputProps);
+      Object.entries(newProps).forEach(([key, value]) => {
+        setProp(inputProps, targetProps, key, value);
+      });
+    } else {
+      const mapper = mappers[name];
+      if (mapper) value = mapper(value, inputProps);
+      targetProps[name] = value;
+    }
+  };
+
   return {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     prop(name: string, values: string[] | Function) {
       if (Array.isArray(values)) {
-        values.forEach((value) => (propMap[value] = name));
+        values.forEach((value) => (singlePropMappings[value] = name));
       } else {
-        propMap[name] = values;
+        multiplePropMappings[name] = values;
       }
       hasPropMap = true;
       return this;
@@ -583,23 +604,7 @@ export const create = <C>(
           // optimize performance
           if (hasMapper || hasPropMap) {
             Object.entries(props).forEach(([key, value]) => {
-              const mapper = mappers[key];
-              if (mapper) {
-                value = mapper(value, props);
-              }
-              const mapTo = propMap[key];
-              if (mapTo) {
-                // is computed prop
-                if (typeof mapTo === "function") {
-                  Object.assign(mappedProps, mapTo(value, props));
-                } else {
-                  if (value && typeof mappedProps[mapTo] === "undefined") {
-                    mappedProps[mapTo] = key;
-                  }
-                }
-              } else {
-                mappedProps[key] = value;
-              }
+              setProp(props, mappedProps, key, value);
             });
           } else {
             Object.assign(mappedProps, props);
